@@ -3,7 +3,7 @@ import numpy as np
 import HandTracingModule as htm
 import time
 import autopy
-
+from shapely.geometry import Polygon
 
 ####################################################
 def findMaxArea(contours):
@@ -20,8 +20,8 @@ def findMaxArea(contours):
 
         x, y, w, h = cv2.boundingRect(contour)
 
-        if w > h:
-            continue
+        # if w > h:
+        #     continue
 
         rect_boundary = w*h
         if rect_boundary > max_rect_boundary:
@@ -32,29 +32,20 @@ def findMaxArea(contours):
             max_y = y
             max_w = w
             max_h = h
-        # if (w * h) * 0.4 > area:
-        #     continue
-        #
-        # if w > h:
-        #     continue
 
-        # if area > max_area:
-        #     max_area = area
-        #     max_contour = contour
 
     if max_area < 100:
         max_area = -1
 
 
     return max_area, max_contour,max_x,max_y,max_w,max_h
-####################################################
 
 
-############################
+##############################################################
 # cam 크기, 화면 크기
 wCam, hCam = 1280, 720
 wScr, hScr = autopy.screen.size()
-############################
+##############################################################
 
 ##############################################################
 
@@ -70,7 +61,7 @@ cv2.createTrackbar('highS','trackbar', 106, 255, nothing)
 cv2.createTrackbar('lowV','trackbar', 63, 255, nothing)
 cv2.createTrackbar('highV','trackbar', 132, 255, nothing)
 
-#
+# trackBar
 cv2.namedWindow('trackbar1')
 cv2.createTrackbar('setFrame','trackbar1', 540, 1280, nothing)
 cv2.createTrackbar('leftRight', 'trackbar1',0,1,nothing) # 0 : 오른손 , 1 : 왼손
@@ -101,22 +92,13 @@ while True:
         black_mask = np.zeros((720, 1280 - mask_width), dtype=np.uint8)
         frame_mask = cv2.hconcat([white_mask, black_mask])
     elif left_right == 1:
-        white_mask = np.zeros((720, mask_width), dtype=np.uint8) * 255
-        black_mask = np.ones((720, 1280 - mask_width), dtype=np.uint8)
+        white_mask = np.zeros((720, mask_width), dtype=np.uint8)
+        black_mask = np.ones((720, 1280 - mask_width), dtype=np.uint8) * 255
         frame_mask = cv2.hconcat([white_mask, black_mask])
 
 
-    cv2.imshow('frame_mask',frame_mask)
 
 
-    #1. 손가락 특징 찾기
-
-
-
-    #11. FrameRate
-    cTime = time.time()
-    fps = 1/(cTime - pTime)
-    pTime = cTime
 
     ##########################################################################
     #trackbar
@@ -147,19 +129,20 @@ while True:
     cv2.imshow('skin_img', skin_img)
     ##############################################################
     #배경색이 흰색이라 검은색으로 바꿔줌
-    skin_img = 255 - skin_img
-    hand_mask = skin_img + frame_mask
-    cv2.imshow("mask", hand_mask)
+    hand_mask = cv2.add(skin_img,frame_mask)
+    hand_mask = 255 - hand_mask
+
+    # cv2.imshow("mask", hand_mask)
     ##############################################################
     #노이즈 완화하기, blur처리 후 closing 연산
-    reduce_noise = cv2.GaussianBlur(skin_img, (5, 5), 0)
+    reduce_noise = cv2.GaussianBlur(hand_mask, (5, 5), 0)
     se = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 
     for i in range(10):
         reduce_noise = cv2.dilate(reduce_noise, se)
         reduce_noise = cv2.erode(reduce_noise, se)
 
-    #cv2.imshow('reduce_noise', reduce_noise)
+    cv2.imshow('reduce_noise', reduce_noise)
 
     ##############################################################
     # 경계값 구분이 애매해서 equalizeHist 로 밝기 분포를 넓힘
@@ -176,21 +159,23 @@ while True:
     ##############################################################
     # grayscale -> 이진화
     ret, binary = cv2.threshold(canny, 125, 250, cv2.THRESH_BINARY)
-    #cv2.imshow("binary", binary)
+    cv2.imshow("binary", binary)
+
+
 
 
     ##############################################################
     # contour 검출
 
-    contours, hierachy = cv2.findContours(binary, cv2.RETR_EXTERNAL , cv2.CHAIN_APPROX_NONE)
+    contours, hierachy = cv2.findContours(binary, cv2.RETR_EXTERNAL , cv2.CHAIN_APPROX_SIMPLE)
 
     ##############################################################
-    # 가장 큰 contour 검출
+    # 가장 큰 contour 검출, contour box drawing
     max_area, max_contour,x,y,w,h = findMaxArea(contours)
 
-    cv2.drawContours(img, [max_contour], 0, (0, 0, 255), 3)
-
-
+    if max_contour is not None:
+        cv2.drawContours(img, [max_contour], 0, (0, 0, 255), 3)
+        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0))
 
 
     ##############################################################
@@ -200,12 +185,22 @@ while True:
     touchPadWidth = cv2.getTrackbarPos('touchPadWidth', 'trackbar1')
     touchPadHeight = cv2.getTrackbarPos('touchPadHeight', 'trackbar1')
 
-    cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0))
-    cv2.rectangle(img, (touchPadX, touchPadY), (touchPadX+touchPadWidth, touchPadY+touchPadHeight), (0, 0, 255),3)
+    # 오른손인식 왼손인식 box 그리기
+    if left_right == 1 :
+        cv2.rectangle(img,(0,0),(mask_width,720),(255,0,0),3)
+    elif left_right == 0 :
+        cv2.rectangle(img, (mask_width, 0), (1280, 720), (255, 0, 0),3)
 
-    #cv2.imshow("contour", img)
+    # touchpad 부분 box 그리기
+    cv2.rectangle(img, (touchPadX, touchPadY), (touchPadX + touchPadWidth, touchPadY + touchPadHeight), (0, 0, 255),3)
 
 
+
+    cv2.imshow("contour", img)
+
+
+    #손가락 위치 찾기
+    #ret, points = getFingerPosition(max_contour, img)
 
     # for i in range(len(contours)):
     #     cv2.drawContours(img, contours,i,(0,0,255),3)
