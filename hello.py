@@ -1,9 +1,8 @@
 import cv2
 import numpy as np
-import HandTracingModule as htm
-import time
-import autopy
-from shapely.geometry import Polygon
+#import HandTracingModule as htm
+#import autopy
+#from shapely.geometry import Polygon
 
 ####################################################
 def findMaxArea(contours):
@@ -44,7 +43,7 @@ def findMaxArea(contours):
 ##############################################################
 # cam 크기, 화면 크기
 wCam, hCam = 1280, 720
-wScr, hScr = autopy.screen.size()
+#wScr, hScr = autopy.screen.size()
 ##############################################################
 
 ##############################################################
@@ -78,7 +77,7 @@ cap.set(3, wCam)
 cap.set(4, hCam)
 
 pTime = 0
-detector = htm.handDetector(maxHands=1)
+#detector = htm.handDetector(maxHands=1)
 
 while True:
 
@@ -117,22 +116,25 @@ while True:
     (success, img) = cap.read()
     img = cv2.flip(img,1)
 
+    ##########################################################################
     #hsv 이미지 변환 및 threshhold 설정
     hsvImage = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     extract_skin = cv2.inRange(hsvImage, lower, upper)
 
+    ##########################################################################
     #img 에서 skin 부분 추출
     #skin_img : 손 부분만 추출된 gray scale 이미지 , 배경은 흰색
     gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     reverse_skin = 255 - extract_skin
     skin_img = cv2.add(gray_img,reverse_skin)
     cv2.imshow('skin_img', skin_img)
+
     ##############################################################
-    #배경색이 흰색이라 검은색으로 바꿔줌
+    #frame mask 씌워서 얼굴지움
     hand_mask = cv2.add(skin_img,frame_mask)
     hand_mask = 255 - hand_mask
-
     # cv2.imshow("mask", hand_mask)
+
     ##############################################################
     #노이즈 완화하기, blur처리 후 closing 연산
     reduce_noise = cv2.GaussianBlur(hand_mask, (5, 5), 0)
@@ -161,12 +163,8 @@ while True:
     ret, binary = cv2.threshold(canny, 125, 250, cv2.THRESH_BINARY)
     cv2.imshow("binary", binary)
 
-
-
-
     ##############################################################
     # contour 검출
-
     contours, hierachy = cv2.findContours(binary, cv2.RETR_EXTERNAL , cv2.CHAIN_APPROX_SIMPLE)
 
     ##############################################################
@@ -195,16 +193,13 @@ while True:
     cv2.rectangle(img, (touchPadX, touchPadY), (touchPadX + touchPadWidth, touchPadY + touchPadHeight), (0, 0, 255),3)
 
 
+    hull= cv2.convexHull(max_contour)
+    cv2.drawContours(img, [hull], -1, (0,255,255), 2)
+
 
     cv2.imshow("contour", img)
 
 
-    #손가락 위치 찾기
-    #ret, points = getFingerPosition(max_contour, img)
-
-    # for i in range(len(contours)):
-    #     cv2.drawContours(img, contours,i,(0,0,255),3)
-    # cv2.imshow("contour" , img)
 
 
     cv2.waitKey(1)
