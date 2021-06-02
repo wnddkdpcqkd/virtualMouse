@@ -73,6 +73,7 @@ wScr, hScr = autopy.screen.size()
 smoothening = 5
 plocX, plocY = 0,0
 clocX, clocY = 0,0
+click_flag = 0
 ##############################################################
 
 ##############################################################
@@ -354,9 +355,11 @@ while True:
         finger_x, finger_y = new_points[0]
 
         if check_inpad(new_points, touchPadX, touchPadY, touchPadWidth, touchPadHeight) :
-            print(finger_cnt)
+
             if finger_cnt == 2 and defects_cnt == 1:
-                autopy.mouse.click()
+                #autopy.mouse.click()
+                click_flag += 1
+                print(click_flag)
             if finger_cnt == 0 and defects_cnt == 0 :
                 cursor_x = np.interp(finger_x, ( touchPadX, touchPadX + touchPadWidth ), (0,wScr))
                 cursor_y = np.interp(finger_y, ( touchPadY, touchPadY + touchPadHeight ), (0, hScr))
@@ -365,6 +368,9 @@ while True:
                 clocY = plocY + (cursor_y - plocY) / smoothening
 
                 autopy.mouse.move(clocX,clocY)
+                if click_flag != 0 :
+                    autopy.mouse.click()
+                    click_flag = 0
 
                 plocX, plocY = clocX, clocY
 
