@@ -210,7 +210,8 @@ while True:
     max_contour = cv2.approxPolyDP(max_contour,0.02*cv2.arcLength(max_contour,True),True)
     hull = cv2.convexHull(max_contour)
 
-    # convex hull을 통해 추출한 포인트들을 집어넣는다.
+    # convex hull을 통해 추출한 포인트들을 집어넣는다. 
+    # 손가락은 무조건 손바닥보다 위에 있기 때문에 손바닥 아래에서 구한 convex hull point들은 버린다.
     for point in hull:
         if cy > point[0][1]:
             points1.append(tuple(point[0])) 
@@ -262,12 +263,14 @@ while True:
     points = list(set(points))
 
     new_points = []
+
     # 이전에 구한 모든 포인트들을 iteration하여 가장 높은 위치에 있는 손끝 위치를 구한다.
     for p0 in points:
         i = -1
         for index,c0 in enumerate(max_contour):
             c0 = tuple(c0[0])
 
+            # contour를 이루는 점과 손가락 point와 가장 가까운 값을 찾음
             if p0 == c0 or distanceBetweenTwoPoints(p0,c0)<20:
                 i = index
             break
@@ -291,7 +294,8 @@ while True:
             if isinstance(next, np.ndarray):
                 next = tuple(next.tolist())
 
-            
+            # 그 위치를 기준으로 사이 값을 구하여 90도 이하인 값을 추가함.
+            # 이상적으로 가장 높은 위치에 있는 포인트만 양 옆 포인트와의 사잇값이 90도 이하일 것이므로 가장 높은 손끝을 찾는 행위가 된다.
             angle = calculateAngle( np.array(pre) - np.array(p0), np.array(next) - np.array(p0))
 
             if angle < 90:
