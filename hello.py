@@ -1,8 +1,34 @@
 import cv2
 import numpy as np
-#import HandTracingModule as htm
-#import autopy
-#from shapely.geometry import Polygon
+import autopy
+
+debug = True
+####################################################
+def check_inpad(new_points,X,Y,W,H):
+
+    cursor_x,cursor_y = new_points[0]
+
+    if cursor_x > X and cursor_x < X+W and cursor_y > Y and cursor_y < Y+H :
+        return True
+    else:
+        return False
+
+####################################################
+def calculateAngle(A, B):
+    A_norm = np.linalg.norm(A)
+    B_norm = np.linalg.norm(B)
+    C = np.dot(A, B)
+
+    angle = np.arccos(C / (A_norm * B_norm)) * 180 / np.pi
+    return angle
+####################################################
+def distanceBetweenTwoPoints(start, end):
+
+    x1,y1 = start
+    x2,y2 = end
+
+    return int(np.sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2)))
+
 
 ####################################################
 def findMaxArea(contours):
@@ -43,13 +69,20 @@ def findMaxArea(contours):
 ##############################################################
 # cam 크기, 화면 크기
 wCam, hCam = 1280, 720
-#wScr, hScr = autopy.screen.size()
+wScr, hScr = autopy.screen.size()
 ##############################################################
 
 ##############################################################
 
 def nothing(x):
     print(x)
+
+def drawTouchPad(x):
+    if x == 1 :
+        cv2.setTrackbarPos('touchPadX','trackbar1',100)
+    elif x == 0 :
+        cv2.setTrackbarPos('touchPadX', 'trackbar1', 950)
+
 
 # HSV 색상 조절
 cv2.namedWindow('trackbar')
@@ -62,12 +95,14 @@ cv2.createTrackbar('highV','trackbar', 132, 255, nothing)
 
 # trackBar
 cv2.namedWindow('trackbar1')
-cv2.createTrackbar('setFrame','trackbar1', 540, 1280, nothing)
-cv2.createTrackbar('leftRight', 'trackbar1',0,1,nothing) # 0 : 오른손 , 1 : 왼손
+cv2.createTrackbar('setFrame','trackbar1', 640, 1280, nothing)
+cv2.createTrackbar('leftRight', 'trackbar1',0,1,drawTouchPad) # 0 : 오른손 , 1 : 왼손
 cv2.createTrackbar('touchPadX','trackbar1', 950, 1080, nothing)
-cv2.createTrackbar('touchPadY','trackbar1', 180, 960, nothing)
+cv2.createTrackbar('touchPadY','trackbar1', 250, 960, nothing)
 cv2.createTrackbar('touchPadWidth','trackbar1', 320, 540, nothing)
 cv2.createTrackbar('touchPadHeight','trackbar1', 180, 480, nothing)
+
+
 
 ##############################################################
 
@@ -154,13 +189,13 @@ while True:
 
     ##############################################################
     # Canny Edge로 경계값 검출
-    canny = cv2.Canny(reduce_noise,120,250)
+    # canny = cv2.Canny(reduce_noise,120,250)
     #cv2.imshow("canny", canny)
 
 
     ##############################################################
     # grayscale -> 이진화
-    ret, binary = cv2.threshold(canny, 125, 250, cv2.THRESH_BINARY)
+    ret, binary = cv2.threshold(reduce_noise, 80, 250, cv2.THRESH_BINARY)
     cv2.imshow("binary", binary)
 
     ##############################################################
@@ -175,7 +210,6 @@ while True:
         cv2.drawContours(img, [max_contour], 0, (0, 0, 255), 3)
         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0))
 
-
     ##############################################################
     # touchPad 및 인식 범위 설정
     touchPadX = cv2.getTrackbarPos('touchPadX', 'trackbar1')
@@ -183,6 +217,124 @@ while True:
     touchPadWidth = cv2.getTrackbarPos('touchPadWidth', 'trackbar1')
     touchPadHeight = cv2.getTrackbarPos('touchPadHeight', 'trackbar1')
 
+    ##############################################################
+
+    # point 1 -> 추출한 max_contour에서 다각형을 이루는 점을 찍어 convex hull을 통해 다각형을 이루는 포인트들
+    points1 = []
+    if max_contour is None:
+        continue
+    M = cv2.moments(max_contour)
+
+    # 이상적으로 손을 추출하면 그 contour의 중앙값이 손바닥이 됨
+    cx = int(M['m10'] / M['m00'])
+    cy = int(M['m01'] / M['m00'])
+
+    max_contour = cv2.approxPolyDP(max_contour, 0.02 * cv2.arcLength(max_contour, True), True)
+    hull = cv2.convexHull(max_contour)
+
+    # convex hull을 통해 추출한 포인트들을 집어넣는다.
+    for point in hull:
+        if cy > point[0][1]:
+            points1.append(tuple(point[0]))
+            # 검은색으로 표시되며, convex hull을 이루는 점이다.
+    if debug:
+        cv2.drawContours(img, [hull], 0, (0, 255, 0), 2)
+        for point in points1:
+            cv2.circle(img, tuple(point), 15, [0, 0, 0], -1)
+
+    # point 2 -> 손가락의 위치에 해당되는 포인트를 구한다.
+    hull = cv2.convexHull(max_contour, returnPoints=False)
+    hull[::-1].sort(axis=0)
+
+    # 손의 contour와 convex hull을 비교하여 손의 contour의 오목한 값, 즉 손마디를 defects를 통해 찾아낸다.
+    defects = cv2.convexityDefects(max_contour, hull)
+
+    points2 = []
+    defects_cnt = 0
+    if defects is not None:
+        for i in range(defects.shape[0]):
+            s, e, f, d = defects[i, 0]
+            start = tuple(max_contour[s][0])
+            end = tuple(max_contour[e][0])
+            far = tuple(max_contour[f][0])
+
+            # defect와 주변의 convex hull을 이루는 point들의 사이값을 구한다.
+            angle = calculateAngle(np.array(start) - np.array(far), np.array(end) - np.array(far))
+
+            # defect 주변의 양 두 점과의 사이값이 90도 이하이면 해당 값이 손가락이 위치가 된다.
+            if angle < 60:
+                defects_cnt += 1
+                cv2.circle(img,far,5,(0,255,0),-1)
+                if start[1] < cy:
+                    points2.append(start)
+
+                if end[1] < cy:
+                    points2.append(end)
+        # 손가락은 초록색 원으로 그려진다.
+        points2 = list(set(points2))
+        points2.sort(key=lambda x: x[0])
+
+        if debug:
+            cv2.drawContours(img, [max_contour], 0, (255, 0, 255), 2)
+
+            i = 1
+            for point in points2:
+                cv2.putText(img, str(i), tuple((point[0], point[1] - 10)), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
+                cv2.circle(img, tuple(point), 20, [0, 255, 0], 5)
+                i = i + 1
+
+    points = points1 + points2
+    points = list(set(points))
+
+    new_points = []
+    # 이전에 구한 모든 포인트들을 구하여 가장 높은 위치에 있는 손끝 위치를 구한다.
+    for p0 in points:
+        i = -1
+        for index, c0 in enumerate(max_contour):
+            c0 = tuple(c0[0])
+
+            if p0 == c0 or distanceBetweenTwoPoints(p0, c0) < 20:
+                i = index
+            break
+
+        if i >= 0:
+            pre = i - 1
+            if pre < 0:
+                pre = max_contour[len(max_contour) - 1][0]
+            else:
+                pre = max_contour[i - 1][0]
+
+            next = i + 1
+            if next > len(max_contour) - 1:
+                next = max_contour[0][0]
+            else:
+                next = max_contour[i + 1][0]
+
+            if isinstance(pre, np.ndarray):
+                pre = tuple(pre.tolist())
+            if isinstance(next, np.ndarray):
+                next = tuple(next.tolist())
+
+            angle = calculateAngle(np.array(pre) - np.array(p0), np.array(next) - np.array(p0))
+
+            if angle < 90:
+                new_points.append(p0)
+
+
+
+    #############################################################
+    if ret > 0 and len(new_points) > 0:
+        for point in new_points:
+            cv2.circle(img, point, 20, [255, 0, 255], 5)
+
+    ##############################################################
+
+
+
+
+
+
+    ########################################################################
     # 오른손인식 왼손인식 box 그리기
     if left_right == 1 :
         cv2.rectangle(img,(0,0),(mask_width,720),(255,0,0),3)
@@ -192,15 +344,23 @@ while True:
     # touchpad 부분 box 그리기
     cv2.rectangle(img, (touchPadX, touchPadY), (touchPadX + touchPadWidth, touchPadY + touchPadHeight), (0, 0, 255),3)
 
+    ########################################################################
 
-    hull= cv2.convexHull(max_contour)
-    cv2.drawContours(img, [hull], -1, (0,255,255), 2)
+    finger_cnt = len(points2)
+    if len(new_points) != 0:
+        finger_x, finger_y = new_points[0]
+
+        if check_inpad(new_points, touchPadX, touchPadY, touchPadWidth, touchPadHeight) :
+            print(finger_cnt)
+            if finger_cnt == 2 :
+                cursor_x = np.interp(finger_x, ( touchPadX, touchPadX + touchPadWidth ), (0,wScr))
+                cursor_y = np.interp(finger_y, ( touchPadY, touchPadY + touchPadHeight ), (0, hScr))
+                autopy.mouse.move(cursor_x,cursor_y)
+            if finger_cnt == 0 and defects_cnt == 1 :
+                autopy.mouse.click()
 
 
     cv2.imshow("contour", img)
-
-
-
 
     cv2.waitKey(1)
 
