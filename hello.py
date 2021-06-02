@@ -70,6 +70,9 @@ def findMaxArea(contours):
 # cam 크기, 화면 크기
 wCam, hCam = 1280, 720
 wScr, hScr = autopy.screen.size()
+smoothening = 5
+plocX, plocY = 0,0
+clocX, clocY = 0,0
 ##############################################################
 
 ##############################################################
@@ -97,10 +100,10 @@ cv2.createTrackbar('highV','trackbar', 132, 255, nothing)
 cv2.namedWindow('trackbar1')
 cv2.createTrackbar('setFrame','trackbar1', 640, 1280, nothing)
 cv2.createTrackbar('leftRight', 'trackbar1',0,1,drawTouchPad) # 0 : 오른손 , 1 : 왼손
-cv2.createTrackbar('touchPadX','trackbar1', 950, 1080, nothing)
-cv2.createTrackbar('touchPadY','trackbar1', 250, 960, nothing)
-cv2.createTrackbar('touchPadWidth','trackbar1', 320, 540, nothing)
-cv2.createTrackbar('touchPadHeight','trackbar1', 180, 480, nothing)
+cv2.createTrackbar('touchPadX','trackbar1', 680, 1080, nothing)
+cv2.createTrackbar('touchPadY','trackbar1', 100, 960, nothing)
+cv2.createTrackbar('touchPadWidth','trackbar1', 480, 540, nothing)
+cv2.createTrackbar('touchPadHeight','trackbar1', 320, 480, nothing)
 
 
 
@@ -352,12 +355,18 @@ while True:
 
         if check_inpad(new_points, touchPadX, touchPadY, touchPadWidth, touchPadHeight) :
             print(finger_cnt)
-            if finger_cnt == 2 :
+            if finger_cnt == 2 and defects_cnt == 1:
+                autopy.mouse.click()
+            if finger_cnt == 0 and defects_cnt == 0 :
                 cursor_x = np.interp(finger_x, ( touchPadX, touchPadX + touchPadWidth ), (0,wScr))
                 cursor_y = np.interp(finger_y, ( touchPadY, touchPadY + touchPadHeight ), (0, hScr))
-                autopy.mouse.move(cursor_x,cursor_y)
-            if finger_cnt == 0 and defects_cnt == 1 :
-                autopy.mouse.click()
+
+                clocX = plocX + (cursor_x - plocX) / smoothening
+                clocY = plocY + (cursor_y - plocY) / smoothening
+
+                autopy.mouse.move(clocX,clocY)
+
+                plocX, plocY = clocX, clocY
 
 
     cv2.imshow("contour", img)
