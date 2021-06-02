@@ -236,10 +236,10 @@ while True:
             end = tuple(max_contour[e][0])
             far = tuple(max_contour[f][0])
 
-            # defect와 주변의 convex hull을 이루는 point들의 사이값을 구한다.
+            # defect와 주변의 convex hull을 이루는 point들의 사잇각을 구한다.
             angle = calculateAngle( np.array(start) - np.array(far), np.array(end) - np.array(far))
 
-            # defect 주변의 양 두 점과의 사이값이 90도 이하이면 해당 값이 손가락이 위치가 된다.
+            # defect 주변의 양 두 점과의 사잇각이 90도 이하이면 해당 값이 손가락이 위치가 된다.
             if angle < 90:
                 if start[1] < cy:
                     points2.append(start)
@@ -262,7 +262,7 @@ while True:
     points = list(set(points))
 
     new_points = []
-    # 이전에 구한 모든 포인트들을 구하여 가장 높은 위치에 있는 손끝 위치를 구한다.
+    # 이전에 구한 모든 포인트들을 iteration하여 가장 높은 위치에 있는 손끝 위치를 구한다.
     for p0 in points:
         i = -1
         for index,c0 in enumerate(max_contour):
