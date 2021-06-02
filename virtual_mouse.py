@@ -3,6 +3,24 @@ import numpy as np
 import time
 import autopy
 
+debug = True
+
+####################################################
+def calculateAngle(A, B):
+    A_norm = np.linalg.norm(A)
+    B_norm = np.linalg.norm(B)
+    C = np.dot(A,B)
+
+    angle = np.arccos(C/(A_norm*B_norm))*180/np.pi
+    return angle
+    
+####################################################
+def distanceBetweenTwoPoints(start, end):
+
+    x1,y1 = start
+    x2,y2 = end
+
+    return int(np.sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2)))
 ####################################################
 def findMaxArea(contours):
     max_contour = None
@@ -72,6 +90,7 @@ cv2.createTrackbar('touchPadHeight','trackbar1', 180, 480, nothing)
 
 
 cap = cv2.VideoCapture(0)
+#cap = cv2.VideoCapture('left.mp4')
 cap.set(3, wCam)
 cap.set(4, hCam)
 
@@ -152,28 +171,118 @@ while True:
 
     ##############################################################
     # Canny Edge로 경계값 검출
-    canny = cv2.Canny(reduce_noise,120,250)
+    #canny = cv2.Canny(reduce_noise,120,250)
     #cv2.imshow("canny", canny)
 
 
     ##############################################################
     # grayscale -> 이진화
-    ret, binary = cv2.threshold(canny, 125, 250, cv2.THRESH_BINARY)
+    ret, binary = cv2.threshold(reduce_noise, 125, 250, cv2.THRESH_BINARY)
     cv2.imshow("binary", binary)
 
     ##############################################################
     # contour 검출
-    #contours, hierachy = cv2.findContours(binary, cv2.RETR_EXTERNAL , cv2.CHAIN_APPROX_SIMPLE)
-    contours, hierachy = cv2.findContours(binary, cv2.RETR_TREE , cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierachy = cv2.findContours(binary, cv2.RETR_EXTERNAL , cv2.CHAIN_APPROX_SIMPLE)
+    #contours, hierachy = cv2.findContours(binary, cv2.RETR_TREE , cv2.CHAIN_APPROX_SIMPLE)
     
     ##############################################################
     # 가장 큰 contour 검출, contour box drawing
     max_area, max_contour,x,y,w,h = findMaxArea(contours)
 
-    if max_contour is not None:
+    if max_contour is not None: 
         cv2.drawContours(img, [max_contour], 0, (0, 0, 255), 3)
         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0))
 
+
+    #############################################################
+    points1 = []
+    M = cv2.moments(max_contour)
+
+    cx = int(M['m10']/M['m00'])
+    cy = int(M['m01']/M['m00'])
+
+    max_contour = cv2.approxPolyDP(max_contour,0.02*cv2.arcLength(max_contour,True),True)
+    hull = cv2.convexHull(max_contour)
+
+    
+
+    for point in hull:
+        if cy > point[0][1]:
+            points1.append(tuple(point[0])) 
+    if debug:
+        cv2.drawContours(img, [hull], 0, (0,255,0), 2)
+        for point in points1:
+            cv2.circle(img, tuple(point), 15, [ 0, 0, 0], -1)
+
+    hull = cv2.convexHull(max_contour, returnPoints=False)
+    hull[::-1].sort(axis=0)
+    defects = cv2.convexityDefects(max_contour, hull)
+
+    points2=[]
+
+    if defects is not None:
+        for i in range(defects.shape[0]):
+            s,e,f,d = defects[i, 0]
+            start = tuple(max_contour[s][0])
+            end = tuple(max_contour[e][0])
+            far = tuple(max_contour[f][0])
+
+            angle = calculateAngle( np.array(start) - np.array(far), np.array(end) - np.array(far))
+
+            if angle < 90:
+                if start[1] < cy:
+                    points2.append(start)
+
+                if end[1] < cy:
+                    points2.append(end)
+
+        if debug:
+            cv2.drawContours(img, [max_contour], 0, (255, 0, 255), 2)
+            for point in points2:
+                cv2.circle(img, tuple(point), 20, [ 0, 255, 0], 5)
+
+    points = points1 + points2
+    points = list(set(points))
+
+    new_points = []
+    for p0 in points:
+        i = -1
+        for index,c0 in enumerate(max_contour):
+            c0 = tuple(c0[0])
+
+            if p0 == c0 or distanceBetweenTwoPoints(p0,c0)<20:
+                i = index
+            break
+
+        if i >= 0:
+            pre = i - 1
+            if pre < 0:
+                pre = max_contour[len(max_contour)-1][0]
+            else:
+                pre = max_contour[i-1][0]
+            
+            next = i + 1
+            if next > len(max_contour)-1:
+                next = max_contour[0][0]
+            else:
+                next = max_contour[i+1][0]
+
+
+            if isinstance(pre, np.ndarray):
+                pre = tuple(pre.tolist())
+            if isinstance(next, np.ndarray):
+                next = tuple(next.tolist())
+
+            
+            angle = calculateAngle( np.array(pre) - np.array(p0), np.array(next) - np.array(p0))     
+
+            if angle < 90:
+                new_points.append(p0)
+
+    #############################################################
+    if ret > 0 and len(new_points) > 0:  
+        for point in new_points:
+            cv2.circle(img, point, 20, [ 255, 0, 255], 5)
 
     ##############################################################
     # touchPad 및 인식 범위 설정
