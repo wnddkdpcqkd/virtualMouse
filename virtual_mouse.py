@@ -177,8 +177,8 @@ while True:
 
     ##############################################################
     # grayscale -> 이진화
-    ret, binary = cv2.threshold(reduce_noise, 125, 250, cv2.THRESH_BINARY)
-    cv2.imshow("binary", binary)
+    ret, binary = cv2.threshold(reduce_noise, 80, 250, cv2.THRESH_BINARY)
+    #cv2.imshow("binary", binary)
 
     ##############################################################
     # contour 검출
@@ -194,28 +194,37 @@ while True:
         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0))
 
 
+
     #############################################################
+
+    # point 1 -> 추출한 max_contour에서 다각형을 이루는 점을 찍어 convex hull을 통해 다각형을 이루는 포인트들 
     points1 = []
+    if max_contour is None:
+        continue
     M = cv2.moments(max_contour)
 
+    # 이상적으로 손을 추출하면 그 contour의 중앙값이 손바닥이 됨
     cx = int(M['m10']/M['m00'])
     cy = int(M['m01']/M['m00'])
 
     max_contour = cv2.approxPolyDP(max_contour,0.02*cv2.arcLength(max_contour,True),True)
     hull = cv2.convexHull(max_contour)
 
-    
-
+    # convex hull을 통해 추출한 포인트들을 집어넣는다.
     for point in hull:
         if cy > point[0][1]:
             points1.append(tuple(point[0])) 
+    # 검은색으로 표시되며, convex hull을 이루는 점이다.
     if debug:
         cv2.drawContours(img, [hull], 0, (0,255,0), 2)
         for point in points1:
             cv2.circle(img, tuple(point), 15, [ 0, 0, 0], -1)
 
+    # point 2 -> 손가락의 위치에 해당되는 포인트를 구한다.
     hull = cv2.convexHull(max_contour, returnPoints=False)
     hull[::-1].sort(axis=0)
+
+    # 손의 contour와 convex hull을 비교하여 손의 contour의 오목한 값, 즉 손마디를 defects를 통해 찾아낸다.
     defects = cv2.convexityDefects(max_contour, hull)
 
     points2=[]
@@ -227,24 +236,33 @@ while True:
             end = tuple(max_contour[e][0])
             far = tuple(max_contour[f][0])
 
+            # defect와 주변의 convex hull을 이루는 point들의 사이값을 구한다.
             angle = calculateAngle( np.array(start) - np.array(far), np.array(end) - np.array(far))
 
+            # defect 주변의 양 두 점과의 사이값이 90도 이하이면 해당 값이 손가락이 위치가 된다.
             if angle < 90:
                 if start[1] < cy:
                     points2.append(start)
 
                 if end[1] < cy:
                     points2.append(end)
+        # 손가락은 초록색 원으로 그려진다.
+        points2 = list(set(points2))
+        points2.sort(key = lambda x:x[0])
 
         if debug:
             cv2.drawContours(img, [max_contour], 0, (255, 0, 255), 2)
+            i = 1
             for point in points2:
+                cv2.putText(img,str(i), tuple((point[0], point[1]-10)), cv2.FONT_HERSHEY_SIMPLEX, 2, 255)
                 cv2.circle(img, tuple(point), 20, [ 0, 255, 0], 5)
+                i = i + 1
 
     points = points1 + points2
     points = list(set(points))
 
     new_points = []
+    # 이전에 구한 모든 포인트들을 구하여 가장 높은 위치에 있는 손끝 위치를 구한다.
     for p0 in points:
         i = -1
         for index,c0 in enumerate(max_contour):
@@ -274,13 +292,15 @@ while True:
                 next = tuple(next.tolist())
 
             
-            angle = calculateAngle( np.array(pre) - np.array(p0), np.array(next) - np.array(p0))     
+            angle = calculateAngle( np.array(pre) - np.array(p0), np.array(next) - np.array(p0))
 
             if angle < 90:
                 new_points.append(p0)
 
     #############################################################
-    if ret > 0 and len(new_points) > 0:  
+    #if ret > 0 and len(new_points) > 0:  
+    # 가장 높은 위치에 있는 손끝은 보라색으로 표시된다.
+    if len(new_points) > 0:  
         for point in new_points:
             cv2.circle(img, point, 20, [ 255, 0, 255], 5)
 
