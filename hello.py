@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import autopy
-
+import pyautogui
 debug = True
 ####################################################
 def check_inpad(new_points,X,Y,W,H):
@@ -166,7 +166,7 @@ while True:
     gray_img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     reverse_skin = 255 - extract_skin
     skin_img = cv2.add(gray_img,reverse_skin)
-    cv2.imshow('skin_img', skin_img)
+    #cv2.imshow('skin_img', skin_img)
 
     ##############################################################
     #frame mask 씌워서 얼굴지움
@@ -183,7 +183,7 @@ while True:
         reduce_noise = cv2.dilate(reduce_noise, se)
         reduce_noise = cv2.erode(reduce_noise, se)
 
-    cv2.imshow('reduce_noise', reduce_noise)
+    #cv2.imshow('reduce_noise', reduce_noise)
 
     ##############################################################
     # 경계값 구분이 애매해서 equalizeHist 로 밝기 분포를 넓힘
@@ -199,7 +199,9 @@ while True:
 
     ##############################################################
     # grayscale -> 이진화
-    ret, binary = cv2.threshold(reduce_noise, 80, 250, cv2.THRESH_BINARY)
+    ret, binary = cv2.threshold(reduce_noise, -1, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+
     cv2.imshow("binary", binary)
 
     ##############################################################
@@ -373,8 +375,12 @@ while True:
                     click_flag = 0
 
                 plocX, plocY = clocX, clocY
+            if finger_cnt == 3 and defects_cnt == 2 :
 
+                pyautogui.scroll(int(finger_y - prev_finger_y)*10)
 
+        prev_finger_x = finger_x
+        prev_finger_y = finger_y
     cv2.imshow("contour", img)
 
     cv2.waitKey(1)
