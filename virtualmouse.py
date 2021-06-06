@@ -358,10 +358,13 @@ while True:
 
         if check_inpad(new_points, touchPadX, touchPadY, touchPadWidth, touchPadHeight) :
 
+            #손가락 두개 폈을 때,
             if finger_cnt == 2 and defects_cnt == 1:
                 #autopy.mouse.click()
                 click_flag += 1
                 print(click_flag)
+                
+            #손가락 하나일때 마우스 이동, 두개에서 하나로 접었을 때 클릭
             if finger_cnt == 0 and defects_cnt == 0 :
                 cursor_x = np.interp(finger_x, ( touchPadX, touchPadX + touchPadWidth ), (0,wScr))
                 cursor_y = np.interp(finger_y, ( touchPadY, touchPadY + touchPadHeight ), (0, hScr))
@@ -375,6 +378,8 @@ while True:
                     click_flag = 0
 
                 plocX, plocY = clocX, clocY
+                
+             #손가락 세개일 때 scroll
             if finger_cnt == 3 and defects_cnt == 2 :
 
                 pyautogui.scroll(int(finger_y - prev_finger_y)*10)
