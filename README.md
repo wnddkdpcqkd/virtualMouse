@@ -14,6 +14,7 @@
 ``` pip install opencv-python ```
 <br>``` pip install autopy ```
 <br>``` pip install numpy ```
+<br>``` pip install pyautogui ```
 
 # Run
 - run virtual mouse.py with webcam installed
